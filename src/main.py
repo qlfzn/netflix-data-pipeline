@@ -22,8 +22,5 @@ def main():
 		print(f"ETL failed: {e}")
 		sys.exit(1)
 
-	print("Completed.")
-
-
 if __name__ == '__main__':
 	main()
