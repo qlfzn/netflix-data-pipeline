@@ -4,7 +4,7 @@ class Logger:
     """
     Logger class
     """
-    DEFAULT_FORMAT = "%(asctime)s - %(levelname)s - [%(name)s] - %(filename)s:%(lineno)d - %(message)s"
+    DEFAULT_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(filename)s:%(lineno)d | %(message)s"
     DEFAULT_DATEFMT = "%Y-%m-%d %H:%M:%S"
 
     def __init__(self, class_name: str, level: int = logging.INFO):

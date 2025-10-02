@@ -13,6 +13,7 @@ class BronzeService:
         """
         try: 
             df = self.spark.read \
+            .option("header", True) \
             .option("inferSchema", True) \
             .csv(path=path)
 

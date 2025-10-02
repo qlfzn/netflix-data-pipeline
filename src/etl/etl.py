@@ -19,6 +19,8 @@ class NetflixETL:
             "failed": 0
         }
 
+        self.silver_columns = ["user_id", "movie_id"]
+
     def run_bronze(self, source_path: str, dest_path: str):
         """
         Orchestrate operations in Bronze layer.
@@ -81,24 +83,18 @@ class NetflixETL:
                 continue
 
             # run data quality checks
-            df = self.silver.deduplicate(df, columns=["id"])
-            df = self.silver.drop_null_values(df, columns=["id"])
-
-            df = self.silver.quarantine_rows(
-                df=df,
-                required_columns=["id"],  # placeholder for now
-                quarantine_path="out/quarantine/",
-                table_name=table_name
-            )
+            for col in df.columns:
+                if col in self.silver_columns:
+                    self.logger.info(f"Running data quality checks on column: {col}")
+                    df = self.silver.deduplicate(df, columns=[col])
+                    df = self.silver.drop_null_values(df, columns=[col])
+                else:
+                    continue
 
             df = self.silver.log_processed_time(df)
 
             dest_path = os.path.join(silver_path, table_name)
-            try:
-                df.write.mode("overwrite").parquet(dest_path)
-                self.logger.info(f"Write cleaned table to {dest_path}")
-            except AnalysisException as e:
-                self.logger.error(f"Failed to write table {table_name} to Silver: {e}")
+            self.silver.write_to_silver(df=df, silver_path=dest_path, table_name=table_name)
 
         self.logger.info("Finishing silver layer...")
 
@@ -110,6 +106,11 @@ class NetflixETL:
         out_dir = Path(dest_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        out_path = out_dir / 'bronze'
-        self.logger.info(f"Running bronze on directory {src_dir} -> {out_path}")
-        self.run_bronze(str(src_dir), str(out_path))
+        bronze_path = out_dir / 'bronze'
+        silver_path = out_dir / 'silver'
+
+        self.logger.info(f"Running bronze on directory {src_dir} -> {bronze_path}")
+        self.run_bronze(str(src_dir), str(bronze_path))
+
+        self.logger.info(f"Running silver from {bronze_path} -> {silver_path}")
+        self.run_silver(str(bronze_path), str(silver_path))
