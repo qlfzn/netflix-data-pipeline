@@ -3,15 +3,16 @@ from utils import Logger
 import os
 from pyspark.errors import AnalysisException
 
-from services import BronzeService
+from services import BronzeService, SilverService
 
 
 class NetflixETL:
     def __init__(self) -> None:
         self.bronze = BronzeService()
+        self.silver = SilverService()
         self.logger = Logger(__name__).get_logger()
 
-        self.files_check = {
+        self.bronze_files_check = {
             "total_files": 0,
             "processed": 0,
             "skipped": 0,
@@ -28,7 +29,7 @@ class NetflixETL:
         
         self.logger.info("Starting bronze layer")
         for file in os.listdir(source_path):
-            self.files_check["total_files"] += 1
+            self.bronze_files_check["total_files"] += 1
 
             full_path = os.path.join(source_path, file)
             table_name = os.path.splitext(file)[0] 
@@ -39,24 +40,67 @@ class NetflixETL:
                 row_count = df.count()
                 self.logger.info(f"Successfully read file at path {full_path}. Row count: {row_count}")
             except AnalysisException as e:
-                self.files_check["failed"] += 1
+                self.bronze_files_check["failed"] += 1
                 self.logger.error(f"Failed to read file: {e}")
 
             try:
                 if row_count <= 1:
                     self.logger.warning(f"Skipping empty file: {full_path}")
-                    self.files_check["skipped"] += 1
+                    self.bronze_files_check["skipped"] += 1
                     continue
 
                 self.bronze.write_to_processed(dataframe=df, dest_path=dest_folder)
-                self.files_check["processed"] += 1
+                self.bronze_files_check["processed"] += 1
                 self.logger.info(f"Successfully write file to {dest_folder}/")
             except AnalysisException as e:
-                self.files_check["failed"] += 1
+                self.bronze_files_check["failed"] += 1
                 self.logger.error(f"Failed to write file: {e}")
 
-        self.logger.info(f"Bronze result: {self.files_check}")
+        self.logger.info(f"Bronze result: {self.bronze_files_check}")
         self.logger.info("Finishing bronze layer...")
+
+    def run_silver(self, bronze_path: str, silver_path: str):
+        """
+        Orchestrate operations in Silver layer.
+        """
+        self.logger.info("Starting silver layer")
+
+        if not self.silver.check_path_exists(bronze_path):
+            self.logger.error("Bronze path does not exist. Aborting silver pipeline.")
+            return
+
+        for table_name in os.listdir(bronze_path):
+            table_path = os.path.join(bronze_path, table_name)
+            self.logger.info(f"Processing table: {table_name}")
+
+            try:
+                df = self.silver.read_from_bronze(table_path)
+                self.logger.info(f"Read {table_name} successfully. Row count: {df.count()}")
+            except AnalysisException as e:
+                self.logger.error(f"Failed to read table {table_name}: {e}")
+                continue
+
+            # run data quality checks
+            df = self.silver.deduplicate(df, columns=["id"])
+            df = self.silver.drop_null_values(df, columns=["id"])
+
+            df = self.silver.quarantine_rows(
+                df=df,
+                required_columns=["id"],  # placeholder for now
+                quarantine_path="out/quarantine/",
+                table_name=table_name
+            )
+
+            df = self.silver.log_processed_time(df)
+
+            dest_path = os.path.join(silver_path, table_name)
+            try:
+                df.write.mode("overwrite").parquet(dest_path)
+                self.logger.info(f"Write cleaned table to {dest_path}")
+            except AnalysisException as e:
+                self.logger.error(f"Failed to write table {table_name} to Silver: {e}")
+
+        self.logger.info("Finishing silver layer...")
 
     def run(self, source_dir: str, dest_dir: str):
         """
