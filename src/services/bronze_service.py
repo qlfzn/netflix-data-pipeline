@@ -1,11 +1,10 @@
-from .spark_service import SparkService
-from utils import Logger
-from pyspark.sql import DataFrame
+from logging import Logger
+from pyspark.sql import SparkSession, DataFrame
 
 class BronzeService:
-    def __init__(self) -> None:
-        self.spark = SparkService().get_spark()
-        self.logger = Logger(__name__).get_logger()
+    def __init__(self, spark: SparkSession, logger: Logger) -> None:
+        self.spark = spark
+        self.logger = logger
 
     def read_file(self, path: str) -> DataFrame:
         """

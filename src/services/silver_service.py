@@ -1,13 +1,12 @@
-from .spark_service import SparkService
-from utils import Logger
-from pyspark.sql import DataFrame, functions
+from logging import Logger
+from pyspark.sql import SparkSession, DataFrame, functions
 from pyspark.errors import AnalysisException
 import os
 
 class SilverService:
-    def __init__(self) -> None:
-        self.spark = SparkService().get_spark()
-        self.logger = Logger(__name__).get_logger()
+    def __init__(self, spark: SparkSession, logger: Logger) -> None:
+        self.spark = spark
+        self.logger = logger
     
     def check_path_exists(self, path: str) -> bool:
         if not os.path.exists(path):
