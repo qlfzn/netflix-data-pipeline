@@ -101,7 +101,7 @@ class NetflixETL:
 
         self.logger.info("Finishing silver layer...")
 
-    def run_gold(self, silver_path: str, gold_path: str, sql_dir: str = "sql"):
+    def run_gold(self, silver_path: str, gold_path: str, sql_dir: str = "src/scripts"):
         """
         Orchestrate operations in Gold layer.
         """
@@ -151,4 +151,4 @@ class NetflixETL:
         self.run_silver(str(bronze_path), str(silver_path))
 
         self.logger.info(f"Running gold from {silver_path} -> {gold_path}")
-        self.run_silver(str(silver_path), str(gold_path))
+        self.run_gold(str(silver_path), str(gold_path))

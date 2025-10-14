@@ -8,9 +8,9 @@ class GoldService:
         self.logger = logger
 
         self.aggregations = {
-            "monthly_user_activity": "agg_monthly_user_activity.sql",
-            "content_performance": "agg_content_performance.sql",
-            "subscription_revenue": "agg_subscription_revenue.sql"
+            "gold_monthly_user_activity": "gold_monthly_user_activity.sql",
+            "gold_content_performance": "gold_content_performance.sql",
+            "gold_subscription_revenue": "gold_subscription_revenue.sql"
         }
 
     def check_path_exists(self, path: str) -> bool:
@@ -47,7 +47,7 @@ class GoldService:
         self.logger.info("Starting gold layer")
 
         if not self.check_path_exists(silver_path):
-            self.logger.error("Silver path does not exist. Aborting gold pipeline.")
+            self.logger.error("Silver path does not exist. Stopping gold layer.")
             return
 
         self.register_silver_tables(silver_path)
