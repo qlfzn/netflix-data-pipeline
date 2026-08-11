@@ -10,6 +10,7 @@ This project is an end-to-end Netflix-style data pipeline built with PySpark. It
 - Converts the raw inputs into parquet-based bronze and silver layers.
 - Applies lightweight data quality checks such as deduplication, null filtering, and processed timestamps.
 - Builds gold-layer aggregates for content performance, subscription revenue, and user engagement.
+- Persists the final gold tables into a local DuckDB database for direct SQL exploration.
 
 ## Project Architecture
 
@@ -39,7 +40,16 @@ The pipeline writes parquet outputs to:
 
 - `out/bronze`
 - `out/silver`
-- `out/gold`
+
+The gold layer is stored in:
+
+- `out/netflix_gold.duckdb`
+
+You can query it with DuckDB after the pipeline finishes:
+
+```sql
+SELECT * FROM gold_content_performance;
+```
 
 ## Source Data
 
@@ -48,4 +58,5 @@ The project uses sample datasets for movies, users, watch history, reviews, sear
 ## Notes
 
 - Gold SQL scripts live in `src/sql`.
+- DuckDB stores the final gold tables as queryable outputs.
 - The pipeline is intentionally simple so it is easy to extend with more validation, testing, or orchestration later.

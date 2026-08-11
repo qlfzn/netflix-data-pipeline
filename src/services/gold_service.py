@@ -5,9 +5,10 @@ from pyspark.sql import SparkSession
 
 
 class GoldService:
-    def __init__(self, spark: SparkSession, logger):
+    def __init__(self, spark: SparkSession, logger, db_service=None):
         self.spark = spark
         self.logger = logger
+        self.db_service = db_service
 
         self.aggregations = {
             "gold_user_engagement_profile": "gold_user_engagement_profile.sql",
@@ -42,7 +43,7 @@ class GoldService:
             query = f.read()
         return query
 
-    def run_gold(self, silver_path: str, gold_path: str, sql_dir: str = "src/sql"):
+    def run_gold(self, silver_path: str, sql_dir: str = "src/sql"):
         """
         Orchestrate operations in Gold layer.
         """
@@ -50,6 +51,10 @@ class GoldService:
 
         if not self.check_path_exists(silver_path):
             self.logger.error("Silver path does not exist. Stopping gold layer.")
+            return
+
+        if self.db_service is None:
+            self.logger.error("DuckDB service is not initialized. Stopping gold layer.")
             return
 
         self.register_silver_tables(silver_path)
@@ -65,9 +70,10 @@ class GoldService:
 
             try:
                 result_df = self.spark.sql(query)
-                dest_path = os.path.join(gold_path, gold_table)
-                result_df.write.mode("overwrite").parquet(dest_path)
-                self.logger.info(f"Written gold table '{gold_table}' to {dest_path}")
+                self.db_service.write_df_to_table(gold_table, result_df)
+                self.logger.info(
+                    f"Written gold table '{gold_table}' to DuckDB at {self.db_service.database_path}"
+                )
             except AnalysisException as e:
                 self.logger.error(f"Failed to generate {gold_table}: {e}")
 

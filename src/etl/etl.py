@@ -3,18 +3,23 @@ from pathlib import Path
 
 from pyspark.errors import AnalysisException
 
-from services import BronzeService, GoldService, SilverService, SparkService
-from utils import Logger
+from services.bronze_service import BronzeService
+from services.db_service import DatabaseLayer
+from services.gold_service import GoldService
+from services.silver_service import SilverService
+from services.spark_service import SparkService
+from utils.logger import Logger
 
 
 class NetflixETL:
     def __init__(self) -> None:
         self.spark = SparkService().get_spark()
         self.logger = Logger(class_name=__name__).get_logger()
+        self.db_service: DatabaseLayer | None = None
 
         self.bronze = BronzeService(spark=self.spark, logger=self.logger)
         self.silver = SilverService(spark=self.spark, logger=self.logger)
-        self.gold = GoldService(spark=self.spark, logger=self.logger)
+        self.gold = GoldService(spark=self.spark, logger=self.logger, db_service=self.db_service)
 
         self.bronze_files_check = {
             "total_files": 0,
@@ -115,7 +120,7 @@ class NetflixETL:
 
         self.logger.info("Finishing silver layer...")
 
-    def run_gold(self, silver_path: str, gold_path: str, sql_dir: str = "src/sql"):
+    def run_gold(self, silver_path: str, sql_dir: str = "src/sql"):
         """
         Orchestrate operations in Gold layer.
         """
@@ -123,6 +128,12 @@ class NetflixETL:
 
         if not self.gold.check_path_exists(silver_path):
             self.logger.error("Silver path does not exist. Aborting gold pipeline.")
+            return
+
+        db_service = self.db_service
+
+        if db_service is None:
+            self.logger.error("DuckDB service is not initialized. Stopping gold layer.")
             return
 
         self.gold.register_silver_tables(silver_path)
@@ -138,9 +149,10 @@ class NetflixETL:
 
             try:
                 result_df = self.spark.sql(query)
-                dest_path = os.path.join(gold_path, gold_table)
-                result_df.write.mode("overwrite").parquet(dest_path)
-                self.logger.info(f"Written gold table '{gold_table}' to {dest_path}")
+                db_service.write_df_to_table(gold_table, result_df)
+                self.logger.info(
+                    f"Written gold table '{gold_table}' to DuckDB at {db_service.database_path}"
+                )
             except (AnalysisException, OSError) as e:
                 self.logger.error(f"Failed to generate {gold_table}: {e}")
 
@@ -156,13 +168,20 @@ class NetflixETL:
 
         bronze_path = out_dir / "bronze"
         silver_path = out_dir / "silver"
-        gold_path = out_dir / "gold"
+        duckdb_path = out_dir / "gold/netflix_gold.duckdb"
 
-        self.logger.info(f"Running bronze on directory {src_dir} -> {bronze_path}")
-        self.run_bronze(str(src_dir), str(bronze_path))
+        self.db_service = DatabaseLayer(database_path=str(duckdb_path))
+        self.gold.db_service = self.db_service
 
-        self.logger.info(f"Running silver from {bronze_path} -> {silver_path}")
-        self.run_silver(str(bronze_path), str(silver_path))
+        try:
+            self.logger.info(f"Running bronze on directory {src_dir} -> {bronze_path}")
+            self.run_bronze(str(src_dir), str(bronze_path))
 
-        self.logger.info(f"Running gold from {silver_path} -> {gold_path}")
-        self.run_gold(str(silver_path), str(gold_path))
+            self.logger.info(f"Running silver from {bronze_path} -> {silver_path}")
+            self.run_silver(str(bronze_path), str(silver_path))
+
+            self.logger.info(f"Running gold from {silver_path} -> {duckdb_path}")
+            self.run_gold(str(silver_path))
+        finally:
+            if self.db_service is not None:
+                self.db_service.close()
