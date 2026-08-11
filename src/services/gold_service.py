@@ -1,6 +1,8 @@
 import os
-from pyspark.sql import SparkSession
+
 from pyspark.errors import AnalysisException
+from pyspark.sql import SparkSession
+
 
 class GoldService:
     def __init__(self, spark: SparkSession, logger):
@@ -8,9 +10,9 @@ class GoldService:
         self.logger = logger
 
         self.aggregations = {
-            "gold_monthly_user_activity": "gold_monthly_user_activity.sql",
+            "gold_user_engagement_profile": "gold_user_engagement_profile.sql",
             "gold_content_performance": "gold_content_performance.sql",
-            "gold_subscription_revenue": "gold_subscription_revenue.sql"
+            "gold_subscription_revenue": "gold_subscription_revenue.sql",
         }
 
     def check_path_exists(self, path: str) -> bool:
@@ -40,7 +42,7 @@ class GoldService:
             query = f.read()
         return query
 
-    def run_gold(self, silver_path: str, gold_path: str, sql_dir: str = "sql"):
+    def run_gold(self, silver_path: str, gold_path: str, sql_dir: str = "src/sql"):
         """
         Orchestrate operations in Gold layer.
         """
@@ -69,4 +71,4 @@ class GoldService:
             except AnalysisException as e:
                 self.logger.error(f"Failed to generate {gold_table}: {e}")
 
-        self.logger.info("Finished Gold layer...")
+        self.logger.info("Finished Gold layer")

@@ -2,7 +2,14 @@
 
 ## Project Overview
 
-This project implements an **end-to-end data pipeline** built with **PySpark** to process Netflix-like streaming data. It simulates a real-world data platform by ingesting multiple CSV datasets, transform into structured tables, and preparing them for analytic queries using **SQL**.
+This project is an end-to-end Netflix-style data pipeline built with PySpark. It ingests multiple CSV sources, processes them through bronze, silver, and gold layers, and produces analytical tables that can be queried with SQL.
+
+## What It Does
+
+- Reads raw CSV datasets from the `data/` folder.
+- Converts the raw inputs into parquet-based bronze and silver layers.
+- Applies lightweight data quality checks such as deduplication, null filtering, and processed timestamps.
+- Builds gold-layer aggregates for content performance, subscription revenue, and user engagement.
 
 ## Project Architecture
 
@@ -12,12 +19,33 @@ This project implements an **end-to-end data pipeline** built with **PySpark** t
 
 ![Gold Tables](docs/gold_tables.png)
 
-## Aggregated Tables (Gold)
+## Gold Layer Tables
 
-The **Gold layer** contains aggregated tables that are optimized for query tasks.
+The gold layer contains query-ready tables designed for analysis and reporting.
 
 | Table Name | Description | Example Questions Answered |
 |------------|-------------|----------------------------|
-| `gold_content_performance` | Aggregates viewing and rating metrics for each movie or show | Which titles have the highest total views? What is the average rating per genre? Which content performs best over time? |
-| `gold_subscription_revenue` | Tracks monthly subscription metrics and revenue trends derived from user sign-ups. | How much revenue was generated per month? What’s the net gain/loss in subscribers? How do subscription trends change over time? |
-| `gold_user_engagement_profile` | Summarizes user-level engagement metrics such as total watch time, activity frequency, and content preferences. | Who are the most active users? How does engagement vary across regions or segments? What types of content drive the most user activity? |
+| `gold_content_performance` | Aggregates watch activity, completion, and rating signals by title. | Which titles have the highest total watch hours? Which movies get the best ratings? Which content performs best overall? |
+| `gold_subscription_revenue` | Summarises subscriber counts and revenue trends by month and plan. | How much revenue was generated per month? Which plan brings in the most revenue? How many active subscribers do we have? |
+| `gold_user_engagement_profile` | Combines watch, search, recommendation, and review activity into a user-level engagement profile. | Who are the most active users? Which users search and watch the most? How does engagement vary across segments? |
+
+## Run The Pipeline
+
+```bash
+python src/main.py --source data --dest out
+```
+
+The pipeline writes parquet outputs to:
+
+- `out/bronze`
+- `out/silver`
+- `out/gold`
+
+## Source Data
+
+The project uses sample datasets for movies, users, watch history, reviews, search activity, and recommendation logs.
+
+## Notes
+
+- Gold SQL scripts live in `src/sql`.
+- The pipeline is intentionally simple so it is easy to extend with more validation, testing, or orchestration later.

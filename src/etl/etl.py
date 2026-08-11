@@ -1,9 +1,10 @@
-from pathlib import Path
-from utils import Logger
 import os
+from pathlib import Path
+
 from pyspark.errors import AnalysisException
 
-from services import SparkService, BronzeService, SilverService, GoldService
+from services import BronzeService, GoldService, SilverService, SparkService
+from utils import Logger
 
 
 class NetflixETL:
@@ -19,7 +20,7 @@ class NetflixETL:
             "total_files": 0,
             "processed": 0,
             "skipped": 0,
-            "failed": 0
+            "failed": 0,
         }
 
         self.silver_columns = ["user_id", "movie_id"]
@@ -28,25 +29,34 @@ class NetflixETL:
         """
         Orchestrate operations in Bronze layer.
         """
-        if source_path is None:
-            self.logger.error("Source path does not exist")
+        if not os.path.exists(source_path):
+            self.logger.error(f"Source path does not exist: {source_path}")
             return
-        
+
         self.logger.info("Starting bronze layer")
         for file in os.listdir(source_path):
             self.bronze_files_check["total_files"] += 1
 
             full_path = os.path.join(source_path, file)
-            table_name = os.path.splitext(file)[0] 
+            table_name = os.path.splitext(file)[0]
             dest_folder = os.path.join(dest_path, table_name)
+            row_count = 0
 
             try:
                 df = self.bronze.read_file(path=full_path)
+                if df is None:
+                    self.bronze_files_check["failed"] += 1
+                    self.logger.warning(f"Skipping unreadable file: {full_path}")
+                    continue
+
                 row_count = df.count()
-                self.logger.info(f"Successfully read file at path {full_path}. Row count: {row_count}")
-            except AnalysisException as e:
+                self.logger.info(
+                    f"Successfully read file at path {full_path}. Row count: {row_count}"
+                )
+            except (AnalysisException, OSError) as e:
                 self.bronze_files_check["failed"] += 1
                 self.logger.error(f"Failed to read file: {e}")
+                continue
 
             try:
                 if row_count <= 1:
@@ -57,7 +67,7 @@ class NetflixETL:
                 self.bronze.write_to_processed(dataframe=df, dest_path=dest_folder)
                 self.bronze_files_check["processed"] += 1
                 self.logger.info(f"Successfully write file to {dest_folder}/")
-            except AnalysisException as e:
+            except (AnalysisException, OSError) as e:
                 self.bronze_files_check["failed"] += 1
                 self.logger.error(f"Failed to write file: {e}")
 
@@ -80,7 +90,9 @@ class NetflixETL:
 
             try:
                 df = self.silver.read_from_bronze(table_path)
-                self.logger.info(f"Read {table_name} successfully. Row count: {df.count()}")
+                self.logger.info(
+                    f"Read {table_name} successfully. Row count: {df.count()}"
+                )
             except AnalysisException as e:
                 self.logger.error(f"Failed to read table {table_name}: {e}")
                 continue
@@ -97,11 +109,13 @@ class NetflixETL:
             df = self.silver.log_processed_time(df)
 
             dest_path = os.path.join(silver_path, table_name)
-            self.silver.write_to_silver(df=df, silver_path=dest_path, table_name=table_name)
+            self.silver.write_to_silver(
+                df=df, silver_path=dest_path, table_name=table_name
+            )
 
         self.logger.info("Finishing silver layer...")
 
-    def run_gold(self, silver_path: str, gold_path: str, sql_dir: str = "src/scripts"):
+    def run_gold(self, silver_path: str, gold_path: str, sql_dir: str = "src/sql"):
         """
         Orchestrate operations in Gold layer.
         """
@@ -127,7 +141,7 @@ class NetflixETL:
                 dest_path = os.path.join(gold_path, gold_table)
                 result_df.write.mode("overwrite").parquet(dest_path)
                 self.logger.info(f"Written gold table '{gold_table}' to {dest_path}")
-            except AnalysisException as e:
+            except (AnalysisException, OSError) as e:
                 self.logger.error(f"Failed to generate {gold_table}: {e}")
 
         self.logger.info("Finishing Gold layer...")
@@ -140,9 +154,9 @@ class NetflixETL:
         out_dir = Path(dest_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        bronze_path = out_dir / 'bronze'
-        silver_path = out_dir / 'silver'
-        gold_path = out_dir / 'gold'
+        bronze_path = out_dir / "bronze"
+        silver_path = out_dir / "silver"
+        gold_path = out_dir / "gold"
 
         self.logger.info(f"Running bronze on directory {src_dir} -> {bronze_path}")
         self.run_bronze(str(src_dir), str(bronze_path))

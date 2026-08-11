@@ -1,5 +1,7 @@
 from logging import Logger
-from pyspark.sql import SparkSession, DataFrame
+
+from pyspark.sql import DataFrame, SparkSession
+
 
 class BronzeService:
     def __init__(self, spark: SparkSession, logger: Logger) -> None:
@@ -10,15 +12,13 @@ class BronzeService:
         """
         Read input files and returns DataFrame
         """
-        try: 
-            df = self.spark.read \
-            .option("header", True) \
-            .option("inferSchema", True) \
+        df = (
+            self.spark.read.option("header", True)
+            .option("inferSchema", True)
             .csv(path=path)
+        )
 
-            self.logger.info(f"Successfully read {path}. {df.count()} rows")
-        except Exception as e:
-            self.logger.error(f"Failed to read file: {e}")
+        self.logger.info(f"Successfully read {path}. {df.count()} rows")
 
         return df
 
@@ -26,8 +26,5 @@ class BronzeService:
         """
         Write extracted data to processed folder/bucket in parquet format
         """
-        try:
-            dataframe.write.parquet(path=dest_path)
-            self.logger.info("Successfully write to parquet")
-        except Exception as e:
-            self.logger.error(f"Failed to write to parquet: {e}")
+        dataframe.write.parquet(path=dest_path)
+        self.logger.info("Successfully write to parquet")

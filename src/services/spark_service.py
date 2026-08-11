@@ -1,5 +1,6 @@
-from pyspark.sql import SparkSession
 from pyspark import SparkConf
+from pyspark.sql import SparkSession
+
 
 class SparkService:
     def __init__(self) -> None:

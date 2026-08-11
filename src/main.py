@@ -1,6 +1,6 @@
-from pathlib import Path
 import argparse
 import sys
+from pathlib import Path
 
 from etl import NetflixETL
 
